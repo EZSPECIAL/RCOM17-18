@@ -10,4 +10,5 @@ TODO:
 Progress bar
 llread / llwrite
 llclose
-applayer
+Custom filename
+Custom baudrate

@@ -67,8 +67,8 @@ typedef struct linkLayer {
   char port[PORT_NAME_SIZE];
   uint32_t baudrate;
   uint8_t sequence_number;
-  uint8_t timeout_count;
-  uint8_t timeout_flag;
+  volatile uint8_t timeout_count;
+  volatile uint8_t timeout_flag;
   uint16_t tx_counter;
   uint16_t current_index;
   serialState state;
