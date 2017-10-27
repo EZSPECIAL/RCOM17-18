@@ -1,0 +1,13 @@
+Behavior:
+
+llopen() Transmitter sends SET, tries up to TIMEOUT times, aborts if error or exceeded TIMEOUT
+llopen() Receiver waits for SET, sends UA, doesn't retry and assumes success
+
+llopen() Both BCC1 and Control field are checked for the expected value
+
+
+TODO:
+Progress bar
+llread / llwrite
+llclose
+applayer
