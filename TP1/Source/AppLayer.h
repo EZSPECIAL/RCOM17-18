@@ -24,6 +24,26 @@ int alreceive(int port);
 /*
   Get the filesize of a file with up to INT_MAX bytes
 */
-int get_filesize(FILE* fd);
+int getFilesize(FILE* fd);
+
+/*
+  Creates a start/end data frame for initiating or ending a file transfer
+*/
+int createSEPacket(uint8_t control);
+
+/*
+  Helper function for printing a data frame
+*/
+void printDataFrame(size_t size);
+
+/*
+  Helper function for printing a data frame as ASCII
+*/
+void printDataFrameASCII(size_t size);
+
+/*
+  Resets the data frame in the appLayer struct
+*/
+void resetDataFrame();
 
 #endif /* APPLAYER_H */

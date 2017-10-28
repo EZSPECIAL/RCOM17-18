@@ -23,43 +23,44 @@
   Application layer constants
 */
 
-#define PORT_NAME_SIZE   10
-#define FILENAME_SIZE    256
-#define MAX_START_FRAME  271																		/* Maximum number of bytes for a start/end data frame, allows for 256 bytes filenames */
-#define PACKET_SIZE      128
-#define DATA_FRAME_SIZE  ((PACKET_SIZE + 4 < MAX_START_FRAME) ? MAX_START_FRAME : PACKET_SIZE + 4)  /* Picks the highest value a data frame will ever possibly need */
+#define PORT_NAME_SIZE       10
+#define FILESIZE_MAX_DIGITS  11
+#define FILENAME_SIZE        256
+#define MAX_START_FRAME      272																		/* Maximum number of bytes for a start/end data frame, allows for 256 bytes filenames */
+#define PACKET_SIZE          128
+#define DATA_FRAME_SIZE      ((PACKET_SIZE + 4 < MAX_START_FRAME) ? MAX_START_FRAME : PACKET_SIZE + 4)  /* Picks the highest value a data frame will ever possibly need */
 
-#define C_NS(n)          BIT(6) * n
-#define C_START          0x02
-#define C_END            0x03
+#define C_NS(n)              BIT(6) * n
+#define C_START              0x02
+#define C_END                0x03
 
-#define T_SIZE           0
-#define T_NAME           1
+#define T_SIZE               0
+#define T_NAME               1
 
 /*
   Link layer constants
 */
 
-#define FLAG           0x7E                 /* Start / End frame flag */
+#define FLAG           0x7E                     /* Start / End frame flag */
 
-#define A_TX           0x03                 /* Address field when sending commands as emitter or responses as receiver */
-#define A_RX           0x01                 /* Address field when sending commands as receiver or responses as emitter */
+#define A_TX           0x03                     /* Address field when sending commands as emitter or responses as receiver */
+#define A_RX           0x01                     /* Address field when sending commands as receiver or responses as emitter */
 
-#define C_SET          0x03                 /* Set up command */
-#define C_DISC         0x0B                 /* Disconnect command */
-#define C_UA           0x07                 /* Unnumbered acknowledgment response */
-#define C_RR(n)        (0x05 | BIT(7 * n))  /* Receiver ready response */
-#define C_REJ(n)       (0x01 | BIT(7 * n))  /* Reject response */
+#define C_SET          0x03                     /* Set up command */
+#define C_DISC         0x0B                     /* Disconnect command */
+#define C_UA           0x07                     /* Unnumbered acknowledgment response */
+#define C_RR(n)        (0x05 | BIT(7 * n))      /* Receiver ready response */
+#define C_REJ(n)       (0x01 | BIT(7 * n))      /* Reject response */
 
-#define SU_FRAME_SIZE  5                    /* Expected supervision frame size */
-#define ADDRESS_INDEX  1					/* Frame header address index */
-#define CONTROL_INDEX  2                    /* Frame header control index */
-#define BCC1_INDEX     3                    /* Frame header BCC index */
+#define SU_FRAME_SIZE  5                        /* Expected supervision frame size */
+#define ADDRESS_INDEX  1					    /* Frame header address index */
+#define CONTROL_INDEX  2                        /* Frame header control index */
+#define BCC1_INDEX     3                        /* Frame header BCC index */
 
 #define BAUDRATE       38400
-#define TIMEOUT        3                    /* Number of retries on transmission */
-#define FRAME_MAX_SIZE DATA_FRAME_SIZE + 6  /* Maximum size for a frame, usually the maximum I frame possible */
-#define TIMEOUT_S      3                    /* Number of seconds to wait per try */
+#define TIMEOUT        3                        /* Number of retries on transmission */
+#define FRAME_MAX_SIZE DATA_FRAME_SIZE * 2 + 6  /* Maximum size for a frame, usually the maximum I frame possible */
+#define TIMEOUT_S      3                        /* Number of seconds to wait per try */
 
 /*
   Enumerators
@@ -77,6 +78,8 @@ typedef enum serialError {NO_ERR, BCC1_ERR, CONTROL_ERR, TIMEOUT_ERR} serialErro
 typedef struct applicationLayer {
   int serial_fd;
   serialStatus status;
+  uint16_t tx_counter;
+  int filesize;
   char filename[FILENAME_SIZE];
   uint8_t data_frame[DATA_FRAME_SIZE];
 } applicationLayer;
@@ -91,7 +94,6 @@ typedef struct linkLayer {
   uint8_t sequence_number;
   volatile uint8_t timeout_count;
   volatile uint8_t timeout_flag;
-  uint16_t tx_counter;
   uint16_t current_index;
   serialState state;
   struct termios oldtio;
