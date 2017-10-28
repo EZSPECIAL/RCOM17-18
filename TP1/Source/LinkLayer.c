@@ -15,14 +15,6 @@
 #include "Globals.h"
 #include "LinkLayer.h"
 
-#define ENABLE_DEBUG 1
-
-#if ENABLE_DEBUG
-#define LOG_MSG printf
-#else
-#define LOG_MSG(...)
-#endif
-
 static linkLayer link_layer;
 
 /*
@@ -200,6 +192,22 @@ void resetFrame() {
 	link_layer.state = INIT;
 	link_layer.current_index = 0;
 	bzero(&link_layer.frame, sizeof(link_layer.frame));
+}
+
+/*
+  Attempts to send data_frame after byte stuffing it and appending a frame header
+*/
+int llwrite(int fd, char* data_frame, int length) {
+	
+	return 0;
+}
+
+/*
+  Attempts to read a data_frame, byte destuffs it and validates it
+*/
+int llread(int fd, char* data_frame) {
+	
+	return 0;
 }
 
 /*

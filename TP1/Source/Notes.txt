@@ -7,8 +7,7 @@ llopen() Both BCC1 and Control field are checked for the expected value
 
 
 TODO:
+Send I Frame with filesize / filename (optional)
 Progress bar
 llread / llwrite
 llclose
-Custom filename
-Custom baudrate

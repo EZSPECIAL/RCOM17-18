@@ -5,16 +5,36 @@
   Useful macros
 */
 
+#define ENABLE_DEBUG 1
+
+#if ENABLE_DEBUG
+#define LOG_MSG printf
+#else
+#define LOG_MSG(...)
+#endif
+
 #define BIT(n)     (0x01 << n)
 #define BCC1(a, b) (a ^ b)
 #define FALSE       0
 #define TRUE        1
+#define ABS(x)     ((x) < 0 ? -(x) : (x))
 
 /*
   Application layer constants
 */
 
-#define PORT_NAME_SIZE 10
+#define PORT_NAME_SIZE   10
+#define FILENAME_SIZE    256
+#define MAX_START_FRAME  271																		/* Maximum number of bytes for a start/end data frame, allows for 256 bytes filenames */
+#define PACKET_SIZE      128
+#define DATA_FRAME_SIZE  ((PACKET_SIZE + 4 < MAX_START_FRAME) ? MAX_START_FRAME : PACKET_SIZE + 4)  /* Picks the highest value a data frame will ever possibly need */
+
+#define C_NS(n)          BIT(6) * n
+#define C_START          0x02
+#define C_END            0x03
+
+#define T_SIZE           0
+#define T_NAME           1
 
 /*
   Link layer constants
@@ -38,7 +58,7 @@
 
 #define BAUDRATE       38400
 #define TIMEOUT        3                    /* Number of retries on transmission */
-#define FRAME_MAX_SIZE 512
+#define FRAME_MAX_SIZE DATA_FRAME_SIZE + 6  /* Maximum size for a frame, usually the maximum I frame possible */
 #define TIMEOUT_S      3                    /* Number of seconds to wait per try */
 
 /*
@@ -55,8 +75,10 @@ typedef enum serialError {NO_ERR, BCC1_ERR, CONTROL_ERR, TIMEOUT_ERR} serialErro
 */
 
 typedef struct applicationLayer {
-  int fd;
+  int serial_fd;
   serialStatus status;
+  char filename[FILENAME_SIZE];
+  uint8_t data_frame[DATA_FRAME_SIZE];
 } applicationLayer;
 
 /*

@@ -11,4 +11,14 @@ int llopen(int port, serialStatus role);
 */
 int llclose(int fd);
 
+/*
+  Attempts to send data_frame after byte stuffing it and appending a frame header
+*/
+int llwrite(int fd, char* data_frame, int length);
+
+/*
+  Attempts to read a data_frame, byte destuffs it and validates it
+*/
+int llread(int fd, char* data_frame);
+
 #endif /* LINKLAYER_H */
