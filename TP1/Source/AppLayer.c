@@ -165,6 +165,21 @@ int extractFileInfo(uint8_t* data_frame, size_t length) {
 }
 
 /*
+Writes received data frame to specified fd
+*/
+int writeFile(FILE* fd, uint8_t* data_frame) {
+
+  uint8_t MSB = data_frame[2];
+  uint8_t LSB = data_frame[3];
+
+  size_t nwrite = (MSB << 8) | (LSB & 0xFF);
+
+  fwrite(data_frame + 4, 1, nwrite, fd);
+
+  return 0;
+}
+
+/*
 Opens specified file and creates data packets for sending the file
 */
 int alsend(int port, char* filename) {
@@ -204,22 +219,40 @@ int alsend(int port, char* filename) {
   resetDataFrame();
   size_t packet_size = createSEPacket(C_START);
 
-  uint8_t* data_frame = (uint8_t*) malloc(packet_size * 2); //Allocate double amount for byte stuffing
-  memcpy(data_frame, app_layer.data_frame, packet_size);
-
   LOG_MSG("S/E I Frame  :");
-  printArrayAsHex(data_frame, packet_size);
+  printDataFrame(packet_size);
 
-  int nwrite = llwrite(app_layer.serial_fd, data_frame, packet_size); //TODO state machine? Check error / validation
+  uint8_t end_flag = FALSE;
 
-  if(nwrite < 0) exit(1); //TODO cleanup function
+  while(TRUE) {
 
-  app_layer.tx_counter++;
+    uint8_t* data_frame = (uint8_t*) malloc(packet_size * 2); //Allocate double amount for byte stuffing
+    memcpy(data_frame, app_layer.data_frame, packet_size);
 
-  free(data_frame);
+    int nwrite = llwrite(app_layer.serial_fd, data_frame, packet_size); //TODO state machine? Check error / validation
 
-  resetDataFrame();
-  createDataPacket(fd);
+    if(nwrite < 0) exit(1); //TODO cleanup function
+
+    app_layer.tx_counter++;
+
+    if(end_flag) {
+      free(data_frame);
+      break;
+    }
+
+    resetDataFrame();
+    packet_size = createDataPacket(fd);
+
+    free(data_frame);
+
+    if(packet_size <= 4) { //TODO magic value
+      packet_size = createSEPacket(C_END);
+      end_flag = TRUE;
+    }
+
+  }
+
+
 
 
 
@@ -247,17 +280,19 @@ int alreceive(int port) {
   printf("alreceive: connection established!\n");
 
   uint8_t* data_frame = (uint8_t*) malloc(FRAME_MAX_SIZE);
+  FILE* fd;
 
-  // do {
+  do {
 
     int nread = llread(app_layer.serial_fd, data_frame); //TODO state machine? Check error / validation
 
     if(data_frame[DCONTROL_INDEX] == C_START) {
       extractFileInfo(data_frame, nread);
+      fd = fopen("test.gif", "wb");
       LOG_MSG("Filename: %s Filesize: %d\n", app_layer.filename, app_layer.filesize);
-    }
+    } else if(data_frame[DCONTROL_INDEX] == C_DATA) writeFile(fd, data_frame);
 
-  // } while(data_frame[DCONTROL_INDEX] != C_END);
+  } while(data_frame[DCONTROL_INDEX] != C_END);
 
   free(data_frame);
 
