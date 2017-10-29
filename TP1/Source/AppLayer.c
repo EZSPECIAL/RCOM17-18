@@ -16,6 +16,7 @@
 #include "Globals.h"
 #include "AppLayer.h"
 #include "LinkLayer.h"
+#include "Helper.h"
 
 static applicationLayer app_layer;
 
@@ -133,6 +134,7 @@ Opens specified file and creates data packets for sending the file
 */
 int alsend(int port, char* filename) {
 
+  /* Try to open file for sending */
   strcpy(app_layer.filename, filename);
 
   FILE* fd = fopen(app_layer.filename, "rb");
@@ -142,6 +144,7 @@ int alsend(int port, char* filename) {
     exit(1);
   }
 
+  /* Try to establish a connection */
   app_layer.serial_fd = llopen(port, TRANSMIT);
 
   if(app_layer.serial_fd < 0) {
@@ -151,9 +154,10 @@ int alsend(int port, char* filename) {
 
   printf("alsend: connection established!\n");
 
+  /* Validate the filesize */
   app_layer.filesize = getFilesize(fd);
 
-  LOG_MSG("Filesize: %d\n", app_layer.filesize);
+  LOG_MSG("Filesize     : %d\n", app_layer.filesize);
 
   if(app_layer.filesize <= 0) {
     printf("alsend: file has size 0 or exceeds 2 147 483 647 bytes (~2.14GiB).\n");
@@ -161,12 +165,21 @@ int alsend(int port, char* filename) {
     exit(1);
   }
 
+  /* Send the start I frame */
   resetDataFrame();
-  int packet_size = createSEPacket(C_START);
+  size_t packet_size = createSEPacket(C_START);
 
-  printDataFrame(packet_size);
+  uint8_t* data_frame = (uint8_t*) malloc(packet_size * 2); //Allocate double amount for byte stuffing
+  memcpy(data_frame, app_layer.data_frame, packet_size);
 
-  //TODO llwrite
+  LOG_MSG("S/E I Frame  :");
+  printArrayAsHex(data_frame, packet_size);
+
+  llwrite(app_layer.serial_fd, data_frame, packet_size); //TODO state machine? Check error / validation
+
+  free(data_frame);
+
+
 
 
 

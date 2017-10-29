@@ -14,12 +14,12 @@ int llclose(int fd);
 /*
 Attempts to send data_frame after byte stuffing it and appending a frame header
 */
-int llwrite(int fd, char* data_frame, int length);
+int llwrite(int fd, uint8_t* data_frame, size_t length);
 
 /*
 Attempts to read a data_frame, byte destuffs it and validates it
 */
-int llread(int fd, char* data_frame);
+int llread(int fd, uint8_t* data_frame);
 
 /*
 Restores previous serial port settings

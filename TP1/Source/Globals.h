@@ -31,6 +31,7 @@
 #define DATA_FRAME_SIZE      ((PACKET_SIZE + 4 < MAX_START_FRAME) ? MAX_START_FRAME : PACKET_SIZE + 4)  /* Picks the highest value a data frame will ever possibly need */
 
 #define C_NS(n)              BIT(6) * n
+#define C_DATA               0x01
 #define C_START              0x02
 #define C_END                0x03
 
@@ -42,6 +43,8 @@
 */
 
 #define FLAG           0x7E                     /* Start / End frame flag */
+#define ESCAPE_CHAR    0x7D                     /* Escape character for byte stuffing */
+#define XOCTET         0x20                     /* Octet to xor with for byte stuffing */
 
 #define A_TX           0x03                     /* Address field when sending commands as emitter or responses as receiver */
 #define A_RX           0x01                     /* Address field when sending commands as receiver or responses as emitter */

@@ -14,6 +14,7 @@
 
 #include "Globals.h"
 #include "LinkLayer.h"
+#include "Helper.h"
 
 static linkLayer link_layer;
 
@@ -29,7 +30,7 @@ void timeoutAlarm() {
 }
 
 /*
-Creates a supervision or unnumbered frame from address and control field given, sets it on linkLayer struct
+Creates a supervision or unnumbered frame from address and control field given (F | A | C | BCC | F)
 */
 void createSUFrame(uint8_t address, uint8_t control) {
 
@@ -195,9 +196,74 @@ void resetFrame() {
 }
 
 /*
+Calculates the BCC corresponding to a data frame
+*/
+uint8_t calcBCC2(uint8_t* data_frame, size_t length) {
+
+  uint8_t bcc = data_frame[0];
+
+  size_t i;
+  for(i = 1; i < length; i++) {
+
+      bcc ^= data_frame[i];
+  }
+
+  return bcc;
+}
+
+/*
+Searches for occurrences of flag or the escape character in the data frame and replaces them
+*/
+size_t byte_stuff(uint8_t* data_frame, size_t length) {
+
+  char result[FRAME_MAX_SIZE];
+  size_t add_length = 0;
+
+  size_t i;
+  for(i = 0; i < length; i++) {
+    if(data_frame[i] == FLAG) {
+      result[i + add_length] = ESCAPE_CHAR;
+      result[i + 1 + add_length] = FLAG ^ XOCTET;
+      add_length++;
+    } else if(data_frame[i] == ESCAPE_CHAR) {
+      result[i + add_length] = ESCAPE_CHAR;
+      result[i + 1 + add_length] = ESCAPE_CHAR ^ XOCTET;
+      add_length++;
+    } else {
+      result[i + add_length] = data_frame[i];
+    }
+  }
+
+  bzero(data_frame, length);
+  memcpy(data_frame, result, length + add_length);
+
+  return (length + add_length);
+}
+
+/*
+Creates an information frame from given parameters (F | A | C | BCC1 | D1..DN | BCC2 | F)
+*/
+void createIFrame(uint8_t address, uint8_t control, char* data_frame, uint8_t bcc_2) {
+
+
+}
+
+/*
 Attempts to send data_frame after byte stuffing it and appending a frame header
 */
-int llwrite(int fd, char* data_frame, int length) {
+int llwrite(int fd, uint8_t* data_frame, size_t length) {
+
+  /* Calculate BCC2 and append it to data_frame */
+  uint8_t bcc_2 = calcBCC2(data_frame, length);
+  data_frame[length] = bcc_2;
+
+  /* Byte stuff the data_frame and update length */
+  size_t stuffed_length = byte_stuff(data_frame, length + 1);
+  length = stuffed_length;
+
+  LOG_MSG("BCC2         : 0x%02X\n", bcc_2);
+  LOG_MSG("Stuffed      :");
+  printArrayAsHex(data_frame, length); LOG_MSG("\n"); //TODO remove stuffed debug
 
   return 0;
 }
@@ -205,7 +271,7 @@ int llwrite(int fd, char* data_frame, int length) {
 /*
 Attempts to read a data_frame, byte destuffs it and validates it
 */
-int llread(int fd, char* data_frame) {
+int llread(int fd, uint8_t* data_frame) {
 
   return 0;
 }
