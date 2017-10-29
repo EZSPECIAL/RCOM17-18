@@ -38,6 +38,8 @@
 #define T_SIZE               0
 #define T_NAME               1
 
+#define DCONTROL_INDEX       0
+
 /*
   Link layer constants
 */
@@ -59,6 +61,7 @@
 #define ADDRESS_INDEX  1					              /* Frame header address index */
 #define CONTROL_INDEX  2                        /* Frame header control index */
 #define BCC1_INDEX     3                        /* Frame header BCC index */
+#define HEADER_SIZE    5                        /* Header size without BCC2 */
 
 #define BAUDRATE       38400
 #define TIMEOUT        3                        /* Number of retries on transmission */
@@ -95,6 +98,7 @@ typedef struct linkLayer {
   char port[PORT_NAME_SIZE];
   uint32_t baudrate;
   uint8_t sequence_number;
+  uint32_t length;
   volatile uint8_t timeout_count;
   volatile uint8_t timeout_flag;
   uint16_t current_index;

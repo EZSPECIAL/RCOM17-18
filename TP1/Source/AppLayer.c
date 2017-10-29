@@ -72,19 +72,6 @@ void printDataFrame(size_t size) {
 }
 
 /*
-Helper function for printing a data frame as ASCII
-*/
-void printDataFrameASCII(size_t size) {
-
-  size_t i;
-  for(i = 0; i < size; i++) {
-    LOG_MSG("|%c", app_layer.data_frame[i]);
-  }
-
-  LOG_MSG("|\n");
-}
-
-/*
 Creates a start/end data frame for initiating or ending a file transfer, returns the size of the frame
 */
 int createSEPacket(uint8_t control) {
@@ -122,11 +109,59 @@ int createSEPacket(uint8_t control) {
 }
 
 /*
+Creates a data packet with data read from file, returns the size of the frame
+*/
+int createDataPacket(FILE* fd) {
+
+  app_layer.data_frame[0] = C_DATA;
+  app_layer.data_frame[1] = app_layer.tx_counter % 255;
+
+  int nread = fread(app_layer.data_frame + 4, 1, PACKET_SIZE, fd);
+
+  app_layer.data_frame[2] = (nread >> 8) & 0xFF;
+  app_layer.data_frame[3] = nread & 0xFF;
+
+  return (nread + 4);
+}
+
+/*
 Resets the data frame in the appLayer struct
 */
 void resetDataFrame() {
 
   bzero(&app_layer.data_frame, sizeof(app_layer.data_frame));
+}
+
+/*
+Extract filesize and filename from data_frame
+*/
+int extractFileInfo(uint8_t* data_frame, size_t length) {
+
+  size_t current_index = DCONTROL_INDEX + 1;
+
+  if(data_frame[current_index] == T_SIZE) {
+
+    size_t par_size = data_frame[current_index + 1];
+
+    char filesize[par_size];
+
+    snprintf(filesize, par_size, "%s", data_frame + current_index + 2);
+
+    app_layer.filesize = parseULong(filesize, 10);
+
+    current_index += par_size + 2;
+
+  } else return -1;
+
+  if(data_frame[current_index] == T_NAME) {
+
+    size_t par_size = data_frame[current_index + 1];
+
+    snprintf(app_layer.filename, par_size, "%s", data_frame + current_index + 2);
+
+  } else return -1;
+
+  return 0;
 }
 
 /*
@@ -175,11 +210,16 @@ int alsend(int port, char* filename) {
   LOG_MSG("S/E I Frame  :");
   printArrayAsHex(data_frame, packet_size);
 
-  llwrite(app_layer.serial_fd, data_frame, packet_size); //TODO state machine? Check error / validation
+  int nwrite = llwrite(app_layer.serial_fd, data_frame, packet_size); //TODO state machine? Check error / validation
+
+  if(nwrite < 0) exit(1); //TODO cleanup function
+
+  app_layer.tx_counter++;
 
   free(data_frame);
 
-
+  resetDataFrame();
+  createDataPacket(fd);
 
 
 
@@ -206,7 +246,21 @@ int alreceive(int port) {
 
   printf("alreceive: connection established!\n");
 
-  //TODO llread
+  uint8_t* data_frame = (uint8_t*) malloc(FRAME_MAX_SIZE);
+
+  // do {
+
+    int nread = llread(app_layer.serial_fd, data_frame); //TODO state machine? Check error / validation
+
+    if(data_frame[DCONTROL_INDEX] == C_START) {
+      extractFileInfo(data_frame, nread);
+      LOG_MSG("Filename: %s Filesize: %d\n", app_layer.filename, app_layer.filesize);
+    }
+
+  // } while(data_frame[DCONTROL_INDEX] != C_END);
+
+  free(data_frame);
+
 
 
 

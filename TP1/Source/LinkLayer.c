@@ -26,7 +26,6 @@ void timeoutAlarm() {
   link_layer.timeout_flag = TRUE;
   link_layer.timeout_count++;
   signal(SIGALRM, timeoutAlarm);
-  LOG_MSG("Alarm #%d\n", link_layer.timeout_count);
 }
 
 /*
@@ -125,6 +124,7 @@ Checks if alarm has happened and resets it if it has
 void checkAlarm() {
 
   if(link_layer.timeout_flag) {
+    LOG_MSG("Alarm #%d\n", link_layer.timeout_count);
     alarm(TIMEOUT_S);
     link_layer.timeout_flag = FALSE;
   }
@@ -155,7 +155,8 @@ Reads a full frame from the port and checks BCC1 and the control field expected,
 */
 serialError readFrame(int fd, uint8_t control_expected) {
 
-  int nread = 0;
+  size_t nread = 0;
+  size_t total_read = 0;
 
   while(TRUE) {
 
@@ -172,12 +173,14 @@ serialError readFrame(int fd, uint8_t control_expected) {
       LOG_MSG(" After state: %i\n", link_layer.state);
 
       link_layer.current_index++;
+      total_read += nread;
     }
 
     if(link_layer.state == E_FLAG) {
       downAlarm();
       if(!checkHeaderBCC()) return BCC1_ERR;
       if(link_layer.frame[CONTROL_INDEX] != control_expected) return CONTROL_ERR;
+      link_layer.length = total_read;
       return NO_ERR;
     } else if(link_layer.timeout_flag == TRUE) {
       return TIMEOUT_ERR;
@@ -241,11 +244,52 @@ size_t byte_stuff(uint8_t* data_frame, size_t length) {
 }
 
 /*
+Searches for occurrences of the escape char and replaces it with the escaped char
+*/
+size_t byte_destuff(uint8_t* data_frame, size_t length) {
+
+  char result[FRAME_MAX_SIZE];
+  size_t new_length = 0;
+
+  size_t i;
+  for(i = 0; i < length; i++, new_length++) {
+    if(data_frame[i] == ESCAPE_CHAR) {
+      result[new_length] = data_frame[i + 1] ^ XOCTET;
+      i++;
+    } else result[new_length] = data_frame[i];
+  }
+
+  bzero(data_frame, length);
+  memcpy(data_frame, result, new_length);
+
+  return new_length;
+}
+
+/*
+Extract data frame from a full frame with BCC2 included
+*/
+void extractDataFrame(uint8_t* data_frame, size_t length) {
+
+  size_t i;
+  for(i = 0; i < length - HEADER_SIZE; i++) {
+
+    data_frame[i] = link_layer.frame[i + 4];
+  }
+}
+
+/*
 Creates an information frame from given parameters (F | A | C | BCC1 | D1..DN | BCC2 | F)
 */
-void createIFrame(uint8_t address, uint8_t control, char* data_frame, uint8_t bcc_2) {
+void createIFrame(uint8_t address, uint8_t control, uint8_t* data_frame, size_t length) {
 
+  link_layer.frame[0] = FLAG;
+  link_layer.frame[1] = address;
+  link_layer.frame[2] = control;
+  link_layer.frame[3] = BCC1(address, control);
 
+  memcpy(link_layer.frame + 4, data_frame, length);
+
+  link_layer.frame[length + 4] = FLAG;
 }
 
 /*
@@ -263,9 +307,52 @@ int llwrite(int fd, uint8_t* data_frame, size_t length) {
 
   LOG_MSG("BCC2         : 0x%02X\n", bcc_2);
   LOG_MSG("Stuffed      :");
-  printArrayAsHex(data_frame, length); LOG_MSG("\n"); //TODO remove stuffed debug
+  printArrayAsHex(data_frame, length); //TODO remove stuffed debug
 
-  return 0;
+  uint8_t success = FALSE;
+  int nwrite;
+
+  signal(SIGALRM, timeoutAlarm);
+  link_layer.timeout_flag = TRUE;
+
+  while(link_layer.timeout_count <= TIMEOUT) {
+
+    resetFrame();
+    createIFrame(A_TX, C_NS(link_layer.sequence_number), data_frame, length);
+
+    nwrite = write(fd, link_layer.frame, length + 5);
+
+    LOG_MSG("Sent (b%03i)  :", nwrite);
+    printFrame(length + 5); LOG_MSG("\n");
+
+    checkAlarm();
+
+    resetFrame();
+    serialError status = readFrame(fd, C_RR(!link_layer.sequence_number));
+
+    if(status == NO_ERR) {
+      success = TRUE;
+      break;
+    }
+
+    if(status == BCC1_ERR) //TODO no action?
+    if(status == CONTROL_ERR) {
+      LOG_MSG("BCC1 or Control field was not as expected.\n"); //TODO REJ
+      return -1;
+    }
+  }
+
+  LOG_MSG("Received     :");
+  printFrame(link_layer.current_index);
+
+  if(success) {
+    link_layer.sequence_number = !link_layer.sequence_number;
+    return nwrite;
+  }
+  else {
+    LOG_MSG("Maximum number of retries reached.\n");
+    return -1;
+  }
 }
 
 /*
@@ -273,7 +360,41 @@ Attempts to read a data_frame, byte destuffs it and validates it
 */
 int llread(int fd, uint8_t* data_frame) {
 
-  return 0;
+  resetFrame();
+  serialError status = readFrame(fd, C_NS(link_layer.sequence_number));
+
+  LOG_MSG("Received(%03d):", link_layer.length);
+  printFrame(link_layer.current_index);
+
+  /* Extract data frame with BCC2 included */
+  extractDataFrame(data_frame, link_layer.length);
+
+  /* Destuff data frame extracted */
+  size_t destuffed_length = byte_destuff(data_frame, link_layer.length - HEADER_SIZE);
+  link_layer.length = destuffed_length;
+
+  if(status == BCC1_ERR || status == CONTROL_ERR) { //TODO handle
+    LOG_MSG("BCC1 or Control field was not as expected.\n");
+    return -1;
+  }
+
+  //TODO verify BCC2
+
+  /* Send response */
+
+  int nwrite;
+
+  resetFrame();
+  createSUFrame(A_TX, C_RR(!link_layer.sequence_number));
+
+  nwrite = write(fd, link_layer.frame, SU_FRAME_SIZE);
+
+  LOG_MSG("Sent (b%03i)  :", nwrite);
+  printFrame(SU_FRAME_SIZE);
+
+  link_layer.sequence_number = !link_layer.sequence_number; //Update sequence number
+
+  return link_layer.length - 1;
 }
 
 /*
@@ -291,7 +412,7 @@ int llopen_transmit(int fd) {
 
     nwrite = write(fd, link_layer.frame, SU_FRAME_SIZE);
 
-    LOG_MSG("Sent (b%03i)  :", nwrite);
+    LOG_MSG("Sent (%03d)   :", nwrite);
     printFrame(SU_FRAME_SIZE);
 
     checkAlarm();
@@ -310,7 +431,7 @@ int llopen_transmit(int fd) {
     }
   }
 
-  LOG_MSG("Received     :");
+  LOG_MSG("Received(%03d):", link_layer.length);
   printFrame(link_layer.current_index);
 
   if(success) return 0;
@@ -328,7 +449,7 @@ int llopen_receive(int fd) {
   resetFrame();
   serialError status = readFrame(fd, C_SET);
 
-  LOG_MSG("Received     :");
+  LOG_MSG("Received(%03d):", link_layer.length);
   printFrame(link_layer.current_index);
 
   if(status == BCC1_ERR || status == CONTROL_ERR) {
@@ -343,7 +464,7 @@ int llopen_receive(int fd) {
 
   nwrite = write(fd, link_layer.frame, SU_FRAME_SIZE);
 
-  LOG_MSG("Sent (b%03i)  :", nwrite);
+  LOG_MSG("Sent (%03i)   :", nwrite);
   printFrame(SU_FRAME_SIZE);
 
   return 0;

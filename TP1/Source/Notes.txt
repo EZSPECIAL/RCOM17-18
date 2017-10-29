@@ -13,3 +13,4 @@ llread / llwrite
 llclose
 Validate L1 / L2 (16bit max)
 Custom baudrate / packet size?
+Reuse llopen_transmit receive

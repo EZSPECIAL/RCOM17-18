@@ -32,14 +32,19 @@ Creates a start/end data frame for initiating or ending a file transfer
 int createSEPacket(uint8_t control);
 
 /*
+Creates a data packet with data read from file, returns the size of the frame
+*/
+int createDataPacket(FILE* fd);
+
+/*
 Helper function for printing a data frame
 */
 void printDataFrame(size_t size);
 
 /*
-Helper function for printing a data frame as ASCII
+Extract filesize and filename from data_frame
 */
-void printDataFrameASCII(size_t size);
+int extractFileInfo(uint8_t* data_frame, size_t length);
 
 /*
 Resets the data frame in the appLayer struct

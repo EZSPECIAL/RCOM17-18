@@ -27,3 +27,16 @@ void printArrayAsHex(uint8_t* buffer, size_t size) {
 
   LOG_MSG("|\n");
 }
+
+/*
+Helper function for printing a data frame as ASCII
+*/
+void printArrayAsASCII(uint8_t* buffer, size_t size) {
+
+  size_t i;
+  for(i = 0; i < size; i++) {
+    LOG_MSG("|%c", buffer[i]);
+  }
+
+  LOG_MSG("|\n");
+}
