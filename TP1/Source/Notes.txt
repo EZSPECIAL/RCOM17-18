@@ -7,7 +7,9 @@ llopen() Both BCC1 and Control field are checked for the expected value
 
 
 TODO:
-Send I Frame with filesize / filename
+Send I Frame with filesize / filename (start / end I frame)
 Progress bar
 llread / llwrite
 llclose
+Validate L1 / L2 (16bit max)
+Custom baudrate / packet size?
