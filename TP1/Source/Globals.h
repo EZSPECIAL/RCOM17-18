@@ -63,7 +63,7 @@
 #define BCC1_INDEX     3                        /* Frame header BCC index */
 #define HEADER_SIZE    5                        /* Header size without BCC2 */
 
-#define BAUDRATE       38400
+#define BAUDRATE       B38400
 #define TIMEOUT        3                        /* Number of retries on transmission */
 #define FRAME_MAX_SIZE DATA_FRAME_SIZE * 2 + 6  /* Maximum size for a frame, usually the maximum I frame possible */
 #define TIMEOUT_S      3                        /* Number of seconds to wait per try */

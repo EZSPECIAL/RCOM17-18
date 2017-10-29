@@ -7,9 +7,14 @@ Attempts to establish connection by sending or receiving SET / UA and returns th
 int llopen(int port, serialStatus role);
 
 /*
-//TODO WIP only restores old settings for now
+Attempts to close connection by sending DISC, receiving DISC and sending UA, returns whether it succeeded
 */
-int llclose(int fd);
+int llclose_transmit(int fd);
+
+/*
+Attempts to close connection by receiving DISC, sending DISC and waiting on UA, returns whether it succeeded
+*/
+int llclose_receive(int fd);
 
 /*
 Attempts to send data_frame after byte stuffing it and appending a frame header

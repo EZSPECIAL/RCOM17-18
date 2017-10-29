@@ -502,15 +502,96 @@ int llopen(int port, serialStatus role) {
 }
 
 /*
-//TODO WIP only restores old settings for now
+Attempts to close connection by sending DISC, receiving DISC and sending UA, returns whether it succeeded
 */
-int llclose(int fd) {
+int llclose_transmit(int fd) {
 
-  if (tcsetattr(fd, TCSANOW, &link_layer.oldtio) == -1) {
-    printf("llclose: couldn't set port settings on port %s.\n", link_layer.port);
+  uint8_t success = FALSE;
+  int nwrite;
+
+  while(link_layer.timeout_count <= TIMEOUT) {
+
+    resetFrame();
+    createSUFrame(A_TX, C_DISC);
+
+    nwrite = write(fd, link_layer.frame, SU_FRAME_SIZE);
+
+    LOG_MSG("Sent (%03d)   :", nwrite);
+    printFrame(SU_FRAME_SIZE);
+
+    checkAlarm();
+
+    resetFrame();
+    serialError status = readFrame(fd, C_DISC);
+
+    if(status == NO_ERR) {
+      success = TRUE;
+      break;
+    }
+
+    if(status == BCC1_ERR || status == CONTROL_ERR) {
+      LOG_MSG("BCC1 or Control field was not as expected.\n");
+      return -1;
+    }
+  }
+
+  LOG_MSG("Received(%03d):", link_layer.length);
+  printFrame(link_layer.current_index);
+
+  resetFrame();
+  createSUFrame(A_RX, C_UA);
+
+  nwrite = write(fd, link_layer.frame, SU_FRAME_SIZE);
+
+  LOG_MSG("Sent (%03d)   :", nwrite);
+  printFrame(SU_FRAME_SIZE);
+
+  if(success) {
+    llreset(fd);
+    return 0;
+  } else {
+    LOG_MSG("Maximum number of retries reached.\n");
+    llreset(fd);
+    return -1;
+  }
+}
+
+/*
+Attempts to close connection by receiving DISC, sending DISC and waiting on UA, returns whether it succeeded
+*/
+int llclose_receive(int fd) {
+
+  resetFrame();
+  serialError status = readFrame(fd, C_DISC);
+
+  LOG_MSG("Received(%03d):", link_layer.length);
+  printFrame(link_layer.current_index);
+
+  if(status == BCC1_ERR || status == CONTROL_ERR) {
+    LOG_MSG("BCC1 or Control field was not as expected.\n");
     return -1;
   }
 
+  int nwrite;
+
+  resetFrame();
+  createSUFrame(A_RX, C_DISC);
+
+  nwrite = write(fd, link_layer.frame, SU_FRAME_SIZE);
+
+  LOG_MSG("Sent (%03i)   :", nwrite);
+  printFrame(SU_FRAME_SIZE);
+
+  resetFrame();
+  status = readFrame(fd, C_UA);
+
+  if(status == BCC1_ERR || status == CONTROL_ERR) {
+    LOG_MSG("BCC1 or Control field was not as expected.\n");
+    llreset(fd);
+    return -1;
+  }
+
+  llreset(fd);
   return 0;
 }
 

@@ -258,7 +258,7 @@ int alsend(int port, char* filename) {
 
 
 
-  llclose(app_layer.serial_fd); //TODO DISC / UA -> error check
+  llclose_transmit(app_layer.serial_fd); //TODO return check
 
   close(app_layer.serial_fd);
   fclose(fd);
@@ -288,7 +288,7 @@ int alreceive(int port) {
 
     if(data_frame[DCONTROL_INDEX] == C_START) {
       extractFileInfo(data_frame, nread);
-      fd = fopen("test.gif", "wb");
+      fd = fopen("test.gif", "wb"); //TODO use filename
       LOG_MSG("Filename: %s Filesize: %d\n", app_layer.filename, app_layer.filesize);
     } else if(data_frame[DCONTROL_INDEX] == C_DATA) writeFile(fd, data_frame);
 
@@ -301,7 +301,7 @@ int alreceive(int port) {
 
 
 
-  llclose(app_layer.serial_fd);
+  llclose_receive(app_layer.serial_fd); //TODO check return
 
   close(app_layer.serial_fd);
   return 0;
