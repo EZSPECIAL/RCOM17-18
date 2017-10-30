@@ -1,7 +1,6 @@
 Validate L1 / L2 (16bit max)
-Custom baudrate / packet size?
-Reuse llopen_transmit receive
+Custom baudrate
+Custom packet size
 alsend malloc size
-
-
-test packet_size
+Packet size bug
+Progress bar bug
