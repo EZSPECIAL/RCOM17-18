@@ -5,7 +5,7 @@
   Useful macros
 */
 
-#define ENABLE_DEBUG 1
+#define ENABLE_DEBUG 0
 
 #if ENABLE_DEBUG
 #define LOG_MSG printf
@@ -22,6 +22,8 @@
 /*
   Application layer constants
 */
+
+#define PROGRESS_BAR_SIZE    50
 
 #define PORT_NAME_SIZE       10
 #define FILESIZE_MAX_DIGITS  11
@@ -67,6 +69,7 @@
 #define TIMEOUT        3                        /* Number of retries on transmission */
 #define FRAME_MAX_SIZE DATA_FRAME_SIZE * 2 + 6  /* Maximum size for a frame, usually the maximum I frame possible */
 #define TIMEOUT_S      3                        /* Number of seconds to wait per try */
+#define CLOSE_WAIT     1                        /* Number of seconds to wait before closing serial port */
 
 /*
   Enumerators
@@ -75,7 +78,7 @@
 typedef enum serialStatus {TRANSMIT, RECEIVE} serialStatus;                         /* Current role of the program */
 typedef enum serialState {INIT, S_FLAG, E_FLAG} serialState;                        /* Link layer state machine states */
 typedef enum serialEvent {FLAG_E, TIMEOUT_E} serialEvent;                           /* Link layer state machine events */
-typedef enum serialError {NO_ERR, BCC1_ERR, CONTROL_ERR, TIMEOUT_ERR} serialError;  /* Link layer possible errors */
+typedef enum serialError {NO_ERR, BCC1_ERR, CONTROL_ERR, TIMEOUT_ERR, FLAG_ERR} serialError;  /* Link layer possible errors */
 
 /*
   Struct containing application layer data
@@ -102,6 +105,7 @@ typedef struct linkLayer {
   volatile uint8_t timeout_count;
   volatile uint8_t timeout_flag;
   uint16_t current_index;
+  uint8_t last_response;
   serialState state;
   struct termios oldtio;
   struct termios newtio;

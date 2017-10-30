@@ -151,12 +151,27 @@ int checkHeaderBCC() {
 }
 
 /*
+Empties serial port of data
+*/
+void discardFrame(int fd) {
+
+  size_t nread;
+
+  do {
+    nread = read(fd, link_layer.frame, 1);
+  } while(nread != 0);
+
+  LOG_MSG("Last: 0x%02X\n", link_layer.frame[0]);
+}
+
+/*
 Reads a full frame from the port and checks BCC1 and the control field expected, returns error type or no error on success
 */
 serialError readFrame(int fd, uint8_t control_expected) {
 
   size_t nread = 0;
   size_t total_read = 0;
+  link_layer.length = 0;
 
   while(TRUE) {
 
@@ -165,6 +180,12 @@ serialError readFrame(int fd, uint8_t control_expected) {
     if(nread > 0) {
 
       LOG_MSG("Received[%03i]: 0x%02X | Before state: %i |", link_layer.current_index, link_layer.frame[link_layer.current_index], link_layer.state);
+
+      if(link_layer.current_index == 0) {
+        if(link_layer.frame[link_layer.current_index] != FLAG) {
+          return FLAG_ERR;
+        }
+      }
 
       if(link_layer.frame[link_layer.current_index] == FLAG) {
         llstate(&link_layer.state, FLAG_E);
@@ -178,9 +199,12 @@ serialError readFrame(int fd, uint8_t control_expected) {
 
     if(link_layer.state == E_FLAG) {
       downAlarm();
-      if(!checkHeaderBCC()) return BCC1_ERR;
-      if(link_layer.frame[CONTROL_INDEX] != control_expected) return CONTROL_ERR;
       link_layer.length = total_read;
+      if(!checkHeaderBCC()) return BCC1_ERR;
+      if(link_layer.frame[CONTROL_INDEX] != control_expected) {
+        link_layer.last_response = link_layer.frame[CONTROL_INDEX];
+        return CONTROL_ERR;
+      }
       return NO_ERR;
     } else if(link_layer.timeout_flag == TRUE) {
       return TIMEOUT_ERR;
@@ -306,8 +330,6 @@ int llwrite(int fd, uint8_t* data_frame, size_t length) {
   length = stuffed_length;
 
   LOG_MSG("BCC2         : 0x%02X\n", bcc_2);
-  LOG_MSG("Stuffed      :");
-  printArrayAsHex(data_frame, length); //TODO remove stuffed debug
 
   uint8_t success = FALSE;
   int nwrite;
@@ -335,10 +357,14 @@ int llwrite(int fd, uint8_t* data_frame, size_t length) {
       break;
     }
 
-    if(status == BCC1_ERR) //TODO no action?
-    if(status == CONTROL_ERR) {
-      LOG_MSG("BCC1 or Control field was not as expected.\n"); //TODO REJ
-      return -1;
+    if(status == BCC1_ERR) {
+      link_layer.timeout_flag = TRUE;
+    } else if(status == CONTROL_ERR) {
+      LOG_MSG("Control field was not as expected.\n");
+      if(link_layer.last_response == C_REJ(0)) link_layer.sequence_number = 0;
+      if(link_layer.last_response == C_REJ(1)) link_layer.sequence_number = 1;
+      LOG_MSG("Last response: 0x%02X\n", link_layer.last_response);
+      link_layer.timeout_flag = TRUE;
     }
   }
 
@@ -355,46 +381,71 @@ int llwrite(int fd, uint8_t* data_frame, size_t length) {
   }
 }
 
+
+
 /*
 Attempts to read a data_frame, byte destuffs it and validates it
 */
 int llread(int fd, uint8_t* data_frame) {
 
-  resetFrame();
-  serialError status = readFrame(fd, C_NS(link_layer.sequence_number));
+  uint8_t success = FALSE;
+  uint8_t bcc_error = FALSE;
 
-  LOG_MSG("Received(%03d):", link_layer.length);
-  printFrame(link_layer.current_index);
+  while(success == FALSE) {
 
-  /* Extract data frame with BCC2 included */
-  extractDataFrame(data_frame, link_layer.length);
+    resetFrame();
+    serialError status = readFrame(fd, C_NS(link_layer.sequence_number));
 
-  /* Destuff data frame extracted */
-  size_t destuffed_length = byte_destuff(data_frame, link_layer.length - HEADER_SIZE);
-  link_layer.length = destuffed_length;
+    LOG_MSG("Received(%03d):", link_layer.length);
+    printFrame(link_layer.current_index);
 
-  if(status == BCC1_ERR || status == CONTROL_ERR) { //TODO handle
-    LOG_MSG("BCC1 or Control field was not as expected.\n");
-    return -1;
+    if(status == FLAG_ERR) {
+      discardFrame(fd);
+    } else if(status == BCC1_ERR) {
+      LOG_MSG("BCC1 field was not as expected.\n");
+    } else if(status == CONTROL_ERR) {
+      LOG_MSG("Control field was not as expected.\n");
+      break;
+    } else success = TRUE;
   }
-
-  //TODO verify BCC2
-
-  /* Send response */
 
   int nwrite;
 
-  resetFrame();
-  createSUFrame(A_TX, C_RR(!link_layer.sequence_number));
+  if(success) {
+    /* Extract data frame with BCC2 included */
+    extractDataFrame(data_frame, link_layer.length);
 
+    /* Destuff data frame extracted */
+    size_t destuffed_length = byte_destuff(data_frame, link_layer.length - HEADER_SIZE);
+    link_layer.length = destuffed_length;
+
+    uint8_t bcc_2 = calcBCC2(data_frame, link_layer.length - 1);
+
+    resetFrame();
+
+    if(bcc_2 != data_frame[link_layer.length - 1]) {
+      LOG_MSG("BCC2 Error\n");
+      createSUFrame(A_TX, C_REJ(link_layer.sequence_number));
+      bcc_error = TRUE;
+    } else createSUFrame(A_TX, C_RR(!link_layer.sequence_number));
+  } else {
+    resetFrame();
+    createSUFrame(A_TX, C_RR(link_layer.sequence_number));
+  }
+
+  /* Send response */
   nwrite = write(fd, link_layer.frame, SU_FRAME_SIZE);
 
   LOG_MSG("Sent (b%03i)  :", nwrite);
   printFrame(SU_FRAME_SIZE);
 
-  link_layer.sequence_number = !link_layer.sequence_number; //Update sequence number
+  if(!bcc_error && success) link_layer.sequence_number = !link_layer.sequence_number; //Update sequence number on success
 
-  return link_layer.length - 1;
+  if(bcc_error || !success) return -1;
+
+  size_t length = link_layer.length - 1;
+  link_layer.length = 0;
+  return length;
 }
 
 /*
@@ -531,6 +582,7 @@ int llclose_transmit(int fd) {
 
     if(status == BCC1_ERR || status == CONTROL_ERR) {
       LOG_MSG("BCC1 or Control field was not as expected.\n");
+      llreset(fd);
       return -1;
     }
   }
@@ -545,6 +597,8 @@ int llclose_transmit(int fd) {
 
   LOG_MSG("Sent (%03d)   :", nwrite);
   printFrame(SU_FRAME_SIZE);
+
+  sleep(CLOSE_WAIT);
 
   if(success) {
     llreset(fd);
@@ -569,6 +623,7 @@ int llclose_receive(int fd) {
 
   if(status == BCC1_ERR || status == CONTROL_ERR) {
     LOG_MSG("BCC1 or Control field was not as expected.\n");
+    llreset(fd);
     return -1;
   }
 

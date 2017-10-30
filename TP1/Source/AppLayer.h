@@ -42,6 +42,11 @@ Writes received data frame to specified fd
 int writeFile(FILE* fd, uint8_t* data_frame);
 
 /*
+Update and show progress bar
+*/
+void updateProgressBar(size_t current_bytes);
+
+/*
 Helper function for printing a data frame
 */
 void printDataFrame(size_t size);

@@ -82,7 +82,7 @@ int createSEPacket(uint8_t control) {
   /* 1st parameter, filesize */
   app_layer.data_frame[1] = T_SIZE;
 
-  int filesize_length = (int) ((ceil(log10(app_layer.filesize)) + 1) * sizeof(char)); //TODO function?
+  int filesize_length = (int) ((ceil(log10(app_layer.filesize)) + 1) * sizeof(char));
   app_layer.data_frame[2] = filesize_length;
 
   char filesize[FILESIZE_MAX_DIGITS];
@@ -180,6 +180,33 @@ int writeFile(FILE* fd, uint8_t* data_frame) {
 }
 
 /*
+Update and show progress bar
+*/
+void updateProgressBar(size_t current_bytes) {
+
+  printf("\033c");
+
+  double ratio = (double) current_bytes / (double) app_layer.filesize;
+
+  ratio *= 100.0;
+
+  ratio = ceil(ratio);
+
+  uint8_t filled_size = ratio / 100.0 * PROGRESS_BAR_SIZE;
+
+  printf("[");
+
+  size_t i;
+  for(i = 0; i < PROGRESS_BAR_SIZE; i++) {
+    if(filled_size > i) printf("\u2588");
+    else printf("\u2591");
+  }
+
+  printf("]");
+  printf(" %d\%\n", (int) ratio);
+}
+
+/*
 Opens specified file and creates data packets for sending the file
 */
 int alsend(int port, char* filename) {
@@ -202,7 +229,7 @@ int alsend(int port, char* filename) {
     exit(1);
   }
 
-  printf("alsend: connection established!\n");
+  printf("Connection established!\n");
 
   /* Validate the filesize */
   app_layer.filesize = getFilesize(fd);
@@ -229,9 +256,12 @@ int alsend(int port, char* filename) {
     uint8_t* data_frame = (uint8_t*) malloc(packet_size * 2); //Allocate double amount for byte stuffing
     memcpy(data_frame, app_layer.data_frame, packet_size);
 
-    int nwrite = llwrite(app_layer.serial_fd, data_frame, packet_size); //TODO state machine? Check error / validation
+    int nwrite = llwrite(app_layer.serial_fd, data_frame, packet_size);
 
-    if(nwrite < 0) exit(1); //TODO cleanup function
+    if(nwrite < 0) {
+      llreset(app_layer.serial_fd);
+      exit(1);
+    }
 
     app_layer.tx_counter++;
 
@@ -245,20 +275,16 @@ int alsend(int port, char* filename) {
 
     free(data_frame);
 
-    if(packet_size <= 4) { //TODO magic value
+    if(packet_size <= HEADER_SIZE - 1) {
       packet_size = createSEPacket(C_END);
       end_flag = TRUE;
     }
 
   }
 
+  llclose_transmit(app_layer.serial_fd);
 
-
-
-
-
-
-  llclose_transmit(app_layer.serial_fd); //TODO return check
+  printf("Connection closed, %s transferred successfully!\n", app_layer.filename);
 
   close(app_layer.serial_fd);
   fclose(fd);
@@ -277,31 +303,37 @@ int alreceive(int port) {
     exit(1);
   }
 
-  printf("alreceive: connection established!\n");
+  printf("Connection established!\n");
 
   uint8_t* data_frame = (uint8_t*) malloc(FRAME_MAX_SIZE);
   FILE* fd;
+  size_t bytes_received;
 
-  do {
+  while(TRUE) {
 
-    int nread = llread(app_layer.serial_fd, data_frame); //TODO state machine? Check error / validation
+    int nread = llread(app_layer.serial_fd, data_frame);
+
+    if(nread >= 0 && data_frame[DCONTROL_INDEX] == C_DATA) {
+      bytes_received += nread - HEADER_SIZE;
+      updateProgressBar(bytes_received);
+    }
+
+    if(nread < 0) continue;
 
     if(data_frame[DCONTROL_INDEX] == C_START) {
       extractFileInfo(data_frame, nread);
-      fd = fopen("test.gif", "wb"); //TODO use filename
+      fd = fopen(app_layer.filename, "wb");
       LOG_MSG("Filename: %s Filesize: %d\n", app_layer.filename, app_layer.filesize);
-    } else if(data_frame[DCONTROL_INDEX] == C_DATA) writeFile(fd, data_frame);
-
-  } while(data_frame[DCONTROL_INDEX] != C_END);
+    } else if(data_frame[DCONTROL_INDEX] == C_DATA) {
+      writeFile(fd, data_frame);
+    } else if(data_frame[DCONTROL_INDEX] == C_END) break; //TODO validate filesize / filename
+  }
 
   free(data_frame);
 
+  llclose_receive(app_layer.serial_fd);
 
-
-
-
-
-  llclose_receive(app_layer.serial_fd); //TODO check return
+  printf("Connection closed, %s transferred successfully!\n", app_layer.filename);
 
   close(app_layer.serial_fd);
   return 0;

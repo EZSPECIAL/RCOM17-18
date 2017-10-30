@@ -1,12 +1,7 @@
-Duplicate check (discard data / RR)
-BCC1 ignore
-If BCC2 wrong
-	- REJ if new
-	- RR if duplicate
-llclose
-Progress bar
-
 Validate L1 / L2 (16bit max)
 Custom baudrate / packet size?
 Reuse llopen_transmit receive
 alsend malloc size
+
+
+test packet_size
