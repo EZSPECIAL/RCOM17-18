@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -Wall -std=c99
+CFLAGS = -Wall -std=gnu99
 SRCS = Helper.c AppLayer.c LinkLayer.c
 
 all: $(SRCS)

@@ -1,6 +1,2 @@
 Validate L1 / L2 (16bit max)
-Custom baudrate
-Custom packet size
-alsend malloc size
-Packet size bug
-Progress bar bug
+Validate filename / filesize with end packet

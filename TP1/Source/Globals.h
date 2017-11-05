@@ -27,9 +27,10 @@
 
 #define PORT_NAME_SIZE       10
 #define FILESIZE_MAX_DIGITS  11
+#define DPACKET_HEADER_SIZE  4
 #define FILENAME_SIZE        256
 #define MAX_START_FRAME      272																		                                    /* Maximum number of bytes for a start/end data frame, allows for 256 bytes filenames */
-#define PACKET_SIZE          128
+#define PACKET_SIZE          256
 #define DATA_FRAME_SIZE      ((PACKET_SIZE + 4 < MAX_START_FRAME) ? MAX_START_FRAME : PACKET_SIZE + 4)  /* Picks the highest value a data frame will ever possibly need */
 
 #define C_NS(n)              BIT(6) * n
@@ -98,7 +99,7 @@ typedef struct applicationLayer {
 */
 
 typedef struct linkLayer {
-  char port[PORT_NAME_SIZE];
+  char port[PORT_NAME_SIZE + 1];
   uint32_t baudrate;
   uint8_t sequence_number;
   uint32_t length;

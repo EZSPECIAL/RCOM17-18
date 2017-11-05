@@ -409,8 +409,6 @@ int llread(int fd, uint8_t* data_frame) {
     } else success = TRUE;
   }
 
-  int nwrite;
-
   if(success) {
     /* Extract data frame with BCC2 included */
     extractDataFrame(data_frame, link_layer.length);
@@ -434,7 +432,11 @@ int llread(int fd, uint8_t* data_frame) {
   }
 
   /* Send response */
-  nwrite = write(fd, link_layer.frame, SU_FRAME_SIZE);
+#if ENABLE_DEBUG == 1
+  int nwrite = write(fd, link_layer.frame, SU_FRAME_SIZE);
+#else
+  write(fd, link_layer.frame, SU_FRAME_SIZE);
+#endif
 
   LOG_MSG("Sent (b%03i)  :", nwrite);
   printFrame(SU_FRAME_SIZE);
@@ -454,14 +456,17 @@ Connection establishment specific to the transmitter, returns 0 on success, nega
 int llopen_transmit(int fd) {
 
   uint8_t success = FALSE;
-  int nwrite;
 
   while(link_layer.timeout_count <= TIMEOUT) {
 
     resetFrame();
     createSUFrame(A_TX, C_SET);
 
-    nwrite = write(fd, link_layer.frame, SU_FRAME_SIZE);
+#if ENABLE_DEBUG == 1
+    int nwrite = write(fd, link_layer.frame, SU_FRAME_SIZE);
+#else
+    write(fd, link_layer.frame, SU_FRAME_SIZE);
+#endif
 
     LOG_MSG("Sent (%03d)   :", nwrite);
     printFrame(SU_FRAME_SIZE);
@@ -508,12 +513,14 @@ int llopen_receive(int fd) {
     return -1;
   }
 
-  int nwrite;
-
   resetFrame();
   createSUFrame(A_TX, C_UA);
 
-  nwrite = write(fd, link_layer.frame, SU_FRAME_SIZE);
+#if ENABLE_DEBUG == 1
+  int nwrite = write(fd, link_layer.frame, SU_FRAME_SIZE);
+#else
+  write(fd, link_layer.frame, SU_FRAME_SIZE);
+#endif
 
   LOG_MSG("Sent (%03i)   :", nwrite);
   printFrame(SU_FRAME_SIZE);
@@ -558,14 +565,17 @@ Attempts to close connection by sending DISC, receiving DISC and sending UA, ret
 int llclose_transmit(int fd) {
 
   uint8_t success = FALSE;
-  int nwrite;
 
   while(link_layer.timeout_count <= TIMEOUT) {
 
     resetFrame();
     createSUFrame(A_TX, C_DISC);
 
-    nwrite = write(fd, link_layer.frame, SU_FRAME_SIZE);
+#if ENABLE_DEBUG == 1
+    int nwrite = write(fd, link_layer.frame, SU_FRAME_SIZE);
+#else
+    write(fd, link_layer.frame, SU_FRAME_SIZE);
+#endif
 
     LOG_MSG("Sent (%03d)   :", nwrite);
     printFrame(SU_FRAME_SIZE);
@@ -593,7 +603,11 @@ int llclose_transmit(int fd) {
   resetFrame();
   createSUFrame(A_RX, C_UA);
 
-  nwrite = write(fd, link_layer.frame, SU_FRAME_SIZE);
+#if ENABLE_DEBUG == 1
+  int nwrite = write(fd, link_layer.frame, SU_FRAME_SIZE);
+#else
+  write(fd, link_layer.frame, SU_FRAME_SIZE);
+#endif
 
   LOG_MSG("Sent (%03d)   :", nwrite);
   printFrame(SU_FRAME_SIZE);
@@ -627,12 +641,14 @@ int llclose_receive(int fd) {
     return -1;
   }
 
-  int nwrite;
-
   resetFrame();
   createSUFrame(A_RX, C_DISC);
 
-  nwrite = write(fd, link_layer.frame, SU_FRAME_SIZE);
+#if ENABLE_DEBUG == 1
+  int nwrite = write(fd, link_layer.frame, SU_FRAME_SIZE);
+#else
+  write(fd, link_layer.frame, SU_FRAME_SIZE);
+#endif
 
   LOG_MSG("Sent (%03i)   :", nwrite);
   printFrame(SU_FRAME_SIZE);

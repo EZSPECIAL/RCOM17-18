@@ -194,16 +194,32 @@ void updateProgressBar(size_t current_bytes) {
 
   uint8_t filled_size = ratio / 100.0 * PROGRESS_BAR_SIZE;
 
-  printf("[");
+  printf("\u250C");
 
   size_t i;
+
+  for(i = 0; i < PROGRESS_BAR_SIZE; i++) {
+    printf("\u2500");
+  }
+
+  printf("\u2510\n");
+  printf("\u2502");
+
   for(i = 0; i < PROGRESS_BAR_SIZE; i++) {
     if(filled_size > i) printf("\u2588");
     else printf("\u2591");
   }
 
-  printf("]");
-  printf(" %d\%\n", (int) ratio);
+  printf("\u2502");
+  printf(" %d%%\n", (int) ratio);
+
+  printf("\u2514");
+
+  for(i = 0; i < PROGRESS_BAR_SIZE; i++) {
+    printf("\u2500");
+  }
+
+  printf("\u2518\n");
 }
 
 /*
@@ -250,6 +266,7 @@ int alsend(int port, char* filename) {
   printDataFrame(packet_size);
 
   uint8_t end_flag = FALSE;
+  size_t bytes_received = 0;
 
   while(TRUE) {
 
@@ -280,6 +297,12 @@ int alsend(int port, char* filename) {
       end_flag = TRUE;
     }
 
+    if(!end_flag) {
+      bytes_received += packet_size - DPACKET_HEADER_SIZE;
+#if ENABLE_DEBUG == 0
+      updateProgressBar(bytes_received);
+#endif
+    }
   }
 
   llclose_transmit(app_layer.serial_fd);
@@ -307,7 +330,7 @@ int alreceive(int port) {
 
   uint8_t* data_frame = (uint8_t*) malloc(FRAME_MAX_SIZE);
   FILE* fd;
-  size_t bytes_received;
+  size_t bytes_received = 0;
 
   while(TRUE) {
 
@@ -315,7 +338,9 @@ int alreceive(int port) {
 
     if(nread >= 0 && data_frame[DCONTROL_INDEX] == C_DATA) {
       bytes_received += nread - HEADER_SIZE;
+#if ENABLE_DEBUG == 0
       updateProgressBar(bytes_received);
+#endif
     }
 
     if(nread < 0) continue;
