@@ -1,0 +1,11 @@
+Parse input ftp://[<user>:<password>@]<host>/<url-path>
+Send generic commands do FTP server
+PASV -> RETR -> Connect data socket
+
+
+
+Test with
+	ftp://anonymous:2@speedtest.tele2.net/1MB.zip
+	ftp.up.pt
+	ftp.dlptest.com
+	ftp.uconn.edu
