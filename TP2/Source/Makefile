@@ -1,6 +1,6 @@
 CC = gcc
 CFLAGS = -Wall
-SRCS = Download.c GetIP.c ClientTCP.c
+SRCS = Download.c
 
 all: $(SRCS)
 	$(CC) $(CFLAGS) $(SRCS) -lm -o download

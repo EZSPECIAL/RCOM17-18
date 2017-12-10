@@ -1,11 +1,14 @@
-Parse input ftp://[<user>:<password>@]<host>/<url-path>
-Send generic commands do FTP server
-PASV -> RETR -> Connect data socket
-
-
+Format should be ftp://[<user>:<password>@]<host>/<url-path>
+PARSING NOT DONE
 
 Test with
 	ftp://anonymous:2@speedtest.tele2.net/1MB.zip
+	speedtest.tele2.net
 	ftp.up.pt
-	ftp.dlptest.com
 	ftp.uconn.edu
+	
+1xx read again
+2xx continue
+3xx continue
+4xx repeat command
+5xx abort
