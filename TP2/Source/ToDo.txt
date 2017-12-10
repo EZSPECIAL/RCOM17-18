@@ -6,6 +6,7 @@ Test with
 	speedtest.tele2.net
 	ftp.up.pt
 	ftp.uconn.edu
+	Test.Rebex.Net (demo/password)
 	
 1xx read again
 2xx continue

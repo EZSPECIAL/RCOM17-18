@@ -5,12 +5,20 @@
                        MACROS
  ******************************************************/
 
-#define FTP_PORT	21																//Default FTP port
-#define R1XX		1																//FTP Reply code hundreds digit
-#define R2XX		2																//FTP Reply code hundreds digit
-#define R3XX		3																//FTP Reply code hundreds digit
-#define R4XX		4																//FTP Reply code hundreds digit
-#define R5XX		5																//FTP Reply code hundreds digit
+#ifndef FALSE
+#define FALSE 0
+#endif
+#ifndef TRUE
+#define TRUE  1
+#endif
+ 
+#define FTP_PORT	 21																//Default FTP port
+#define FTP_MSG_SIZE 512															//FTP Message buffer size
+#define R1XX		 1																//FTP Reply code hundreds digit
+#define R2XX		 2																//FTP Reply code hundreds digit
+#define R3XX		 3																//FTP Reply code hundreds digit
+#define R4XX		 4																//FTP Reply code hundreds digit
+#define R5XX		 5	 															//FTP Reply code hundreds digit
 
 /******************************************************
                      ENUMERATORS
@@ -20,6 +28,17 @@ typedef enum {MULTILINE, NON_TERMINATED, REPLY_OVER, REPLY_TOO_LONG} FTPLineType
 typedef enum {WAIT_CR, WAIT_LF, OVER} FTPLineState_t;								//FTP Line states
 typedef enum {WAIT_REPLY, CONTINUE, REPEAT, ABORT} FTPReplyState_t;					//FTP Reply code states
 
+/******************************************************
+                       STRUCTS
+ ******************************************************/
+
+//Stores data socket descriptor and file path needed for download
+typedef struct {
+	
+	char* file_path;
+	int datafd;
+} FTPFile_t;
+ 
 /******************************************************
                       FUNCTIONS
  ******************************************************/
@@ -75,6 +94,16 @@ void FTPAbort(int sockfd, char* message);
 FTPReplyState_t handleFTPReplyCode(uint16_t reply_code);
 
 /**
+ * Sends a command through the TCP connection, if command triggers download calls appropriate function
+ *
+ * @param sockfd TCP socket file descriptor connected to FTP port
+ * @param command FTP command to send
+ * @param download_f whether command will trigger a download from FTP server
+ * @result 0 on success
+ */
+int8_t FTPCommand(int sockfd, char* command, uint8_t download_f);
+
+/**
  * Performs FTP login command sequence
  *
  * @param sockfd TCP socket file descriptor connected to FTP port
@@ -91,5 +120,24 @@ int8_t FTPLogin(int sockfd, char* user, char* password);
  * @return FTP reply code
  */
 uint16_t readFTPReply(int sockfd);
+
+/**
+ * Gets numeric representation of data port from FTP message containing it
+ *
+ * @param message FTP message containing data port
+ * @return data port on success, -1 otherwise
+ */
+int32_t getDataPort(char* message);
+
+/**
+ * Sends PASV command and parses the data port received
+ *
+ * @param sockfd TCP socket file descriptor connected to FTP port
+ * @return data port to use
+ */
+uint16_t FTPPassive(int sockfd);
+
+
+void FTPDownload();
 
 #endif /*__DOWNLOAD_H */

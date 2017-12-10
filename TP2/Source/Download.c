@@ -13,14 +13,31 @@
 #include <string.h>
 #include "Download.h"
 
+static char last_message[FTP_MSG_SIZE];
+static char file_path[] = "./test";
+
+FTPFile_t file_info;
+
 int main(int argc, char *argv[]) {
+
+//ftp://[<user>:<password>@]<host>/<url-path>
+
+	/* Check program parameters */
+	if(argc != 2) {
+		printf("download: Wrong number of arguments.\n");
+		printf("download: usage: ./download ftp://[<user>:<password>@]<host>/<url-path>\n");
+		exit(1);
+	}
+
+	
+	
 
 	/* Get host IP address */
 	struct hostent* host;
 	host = getAddress(argv[1]);
 
 	if(host == NULL) {
-		printf("download: Couldn't get info on host provided, exiting...\n");
+		printf("download: Couldn't get info on host provided.\n");
 		exit(1);
 	}
 
@@ -30,14 +47,122 @@ int main(int argc, char *argv[]) {
 	/* Get TCP socket to host */
 	int sockfd = getTCPSocket(inet_addr(inet_ntoa(*((struct in_addr*)host->h_addr))), FTP_PORT);
 
-	if(sockfd == -1) FTPAbort(sockfd, "download: Failure connecting to server, exiting...\n");
+	if(sockfd < 0) FTPAbort(sockfd, "download: Failure connecting to FTP server control port.\n");
 
-	/* FTP */
+	/* Login to FTP server */
 	FTPLogin(sockfd, "USER anonymous\r\n", "PASS ei11056@fe.up.pt\r\n");
+
+	/* Use BINARY mode */
+	if(FTPCommand(sockfd, "TYPE I\r\n", FALSE) != 0) FTPAbort(sockfd, "download: TYPE command received 5XX code.\n");
 	
+	/* Enter passive mode and get data port */
+	uint16_t data_port = FTPPassive(sockfd);
+	file_info.datafd = getTCPSocket(inet_addr(inet_ntoa(*((struct in_addr*)host->h_addr))), data_port);
+	
+	if(file_info.datafd < 0) FTPAbort(sockfd, "download: Failure connecting to FTP server data port.\n");
+	
+	/* Send command to download file and download it */
+	FTPCommand(sockfd, "RETR /1MB.zip\r\n", TRUE);
+	
+
+	
+	
+	close(file_info.datafd);
 	close(sockfd);
 	
 	return 0;
+}
+
+void FTPDownload() {
+	
+	FILE* fd = fopen(file_path, "wb");
+	
+	char file_data[FTP_MSG_SIZE];
+	int n;
+	
+	while((n = read(file_info.datafd, file_data, FTP_MSG_SIZE)) > 0) {
+		
+		fwrite(file_data, 1, n, fd);
+	}
+	
+	fclose(fd);
+}
+
+/**
+ * Gets numeric representation of data port from FTP message containing it
+ *
+ * @param message FTP message containing data port
+ * @return data port on success, -1 otherwise
+ */
+int32_t getDataPort(char* message) {
+	
+	size_t msg_i = 0;
+	size_t number_i = 0;
+	size_t comma_count = 0;
+	char msb[6];
+	char lsb[6];
+	uint8_t success_f = 0;
+	
+	/* Process message up to null terminator */
+	while(message[msg_i] != '\0') {
+		
+		/* Count commas up to data port values */
+		if(message[msg_i] == ',') comma_count++;
+		msg_i++;
+		
+		/* Next 2 number values will be the data port */
+		if(comma_count >= 4) {
+			
+			/* Read MSB of data port */
+			while(isdigit(message[msg_i])) {
+				
+				msb[number_i] = message[msg_i];
+				number_i++;
+				msg_i++;
+			}
+			
+			msb[number_i] = '\0';
+			number_i = 0;
+			msg_i++;
+			
+			/* Read LSB of data port */
+			while(isdigit(message[msg_i])) {
+				
+				lsb[number_i] = message[msg_i];
+				number_i++;
+				msg_i++;
+			}
+		
+			lsb[number_i] = '\0';
+			success_f = 1;
+			
+			break;
+		}
+	}
+	
+	if(!success_f) return -1;
+
+	unsigned long msb_value = strtoul(msb, NULL, 10);
+	unsigned long lsb_value = strtoul(lsb, NULL, 10);
+	
+	return (msb_value * 256 + lsb_value);
+}
+
+/**
+ * Sends PASV command and parses the data port received
+ *
+ * @param sockfd TCP socket file descriptor connected to FTP port
+ * @return data port to use
+ */
+uint16_t FTPPassive(int sockfd) {
+
+	if(FTPCommand(sockfd, "PASV\r\n", FALSE) != 0) FTPAbort(sockfd, "download: PASV command received 5XX code.\n");
+	
+	int32_t data_port = getDataPort(last_message);
+	
+	if(data_port < 0) FTPAbort(sockfd, "download: data port could not be parsed.\n");
+	
+	return data_port;
 }
 
 /**
@@ -87,6 +212,40 @@ FTPReplyState_t handleFTPReplyCode(uint16_t reply_code) {
 }
 
 /**
+ * Sends a command through the TCP connection, if command triggers download calls appropriate function
+ *
+ * @param sockfd TCP socket file descriptor connected to FTP port
+ * @param command FTP command to send
+ * @param download_f whether command will trigger a download from FTP server
+ * @result 0 on success
+ */
+int8_t FTPCommand(int sockfd, char* command, uint8_t download_f) {
+	
+	FTPReplyState_t reply_state;
+	
+	/* Repeat until reply code signals completion */
+	do {
+	
+		/* Write command and read response */
+		write(sockfd, command, strlen(command));
+		reply_state = handleFTPReplyCode(readFTPReply(sockfd));
+
+		/* Handle reply code */
+		if(reply_state == ABORT) return -1;
+		else if(reply_state == WAIT_REPLY) {
+			
+			if(download_f) FTPDownload();
+			
+			reply_state = handleFTPReplyCode(readFTPReply(sockfd));
+			if(reply_state == ABORT) return -1;
+		}
+		
+	} while(reply_state != CONTINUE);
+	
+	return 0;
+}
+
+/**
  * Performs FTP login command sequence
  *
  * @param sockfd TCP socket file descriptor connected to FTP port
@@ -96,22 +255,19 @@ FTPReplyState_t handleFTPReplyCode(uint16_t reply_code) {
  */
 int8_t FTPLogin(int sockfd, char* user, char* password) {
 	
-	uint16_t reply_code;
+	FTPReplyState_t reply_state;
 	
 	/* Read message of the day */
-	reply_code = readFTPReply(sockfd);
-	handleFTPReplyCode(reply_code);
+	reply_state = handleFTPReplyCode(readFTPReply(sockfd));
 	
-	write(sockfd, user, strlen(user));
+	if(reply_state != CONTINUE) FTPAbort(sockfd, "download: Server is not ready.\n");
 	
-	reply_code = readFTPReply(sockfd);
-	handleFTPReplyCode(reply_code);
+	/* Send USER command */
+	if(FTPCommand(sockfd, user, FALSE) != 0) FTPAbort(sockfd, "download: USER command received 5XX code.\n");
 	
-	write(sockfd, password, strlen(password));
-	
-	reply_code = readFTPReply(sockfd);
-	handleFTPReplyCode(reply_code);
-	
+	/* Send PASS command */
+	if(FTPCommand(sockfd, password, FALSE) != 0) FTPAbort(sockfd, "download: PASS command received 5XX code.\n");
+
 	return 0;
 }
 
@@ -124,12 +280,14 @@ int8_t FTPLogin(int sockfd, char* user, char* password) {
 uint16_t readFTPReply(int sockfd) {
 	
 	FTPLineType_t status;
-	char message[512];
+	char message[FTP_MSG_SIZE];
 	
 	do {
 		status = readFTPLine(sockfd, message, sizeof(message));
 		printf("%s", message);
 	} while(status != REPLY_OVER);
+	
+	strcpy(last_message, message);
 	
 	return parseFTPReplyCode(message);
 }
