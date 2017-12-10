@@ -12,13 +12,18 @@
 #define TRUE  1
 #endif
  
-#define FTP_PORT	 21																//Default FTP port
-#define FTP_MSG_SIZE 512															//FTP Message buffer size
-#define R1XX		 1																//FTP Reply code hundreds digit
-#define R2XX		 2																//FTP Reply code hundreds digit
-#define R3XX		 3																//FTP Reply code hundreds digit
-#define R4XX		 4																//FTP Reply code hundreds digit
-#define R5XX		 5	 															//FTP Reply code hundreds digit
+#define FTP_PORT	   21															//Default FTP port
+#define FTP_MSG_SIZE   512															//FTP Message buffer size
+#define R1XX		   1															//FTP Reply code hundreds digit
+#define R2XX		   2															//FTP Reply code hundreds digit
+#define R3XX		   3															//FTP Reply code hundreds digit
+#define R4XX		   4															//FTP Reply code hundreds digit
+#define R5XX		   5	 														//FTP Reply code hundreds digit
+
+#define FTP_USER_START 6															//User argument start index
+
+#define BUFFER_SIZE    256
+#define FILEPATH_SIZE  1024
 
 /******************************************************
                      ENUMERATORS
@@ -35,10 +40,20 @@ typedef enum {WAIT_REPLY, CONTINUE, REPEAT, ABORT} FTPReplyState_t;					//FTP Re
 //Stores data socket descriptor and file path needed for download
 typedef struct {
 	
-	char* file_path;
+	char path[FILEPATH_SIZE];
 	int datafd;
 } FTPFile_t;
  
+//Stores command line arguments passed
+typedef struct {
+	
+	char user[BUFFER_SIZE];
+	char password[BUFFER_SIZE];
+	char host[BUFFER_SIZE];
+	char path[FILEPATH_SIZE];
+	uint8_t anonymous_f;
+} FTPArgument_t;
+
 /******************************************************
                       FUNCTIONS
  ******************************************************/
@@ -137,7 +152,24 @@ int32_t getDataPort(char* message);
  */
 uint16_t FTPPassive(int sockfd);
 
+/**
+ * Parses command line argument and fills FTPArgument_t struct
+ *
+ * @param argument command line argument received
+ * @return 0 on success
+ */
+int8_t parseArgument(char* argument);
 
+/**
+ * Parses path to file to get the file name, copies it to FTPFile_t struct
+ *
+ * @param path file path
+ */
+void parseFilePath(char* path);
+
+/**
+ * Uses FTP data socket connection to download file requested
+ */
 void FTPDownload();
 
 #endif /*__DOWNLOAD_H */

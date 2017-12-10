@@ -13,28 +13,41 @@
 #include <string.h>
 #include "Download.h"
 
-static char last_message[FTP_MSG_SIZE];
-static char file_path[] = "./test";
+static char last_message[FTP_MSG_SIZE]; //Most recent message received
+static FTPFile_t file_info;				//Information about data socket and local file path
+static FTPArgument_t argument_info;		//Information needed for FTP handling
 
-FTPFile_t file_info;
+int main(int argc, char* argv[]) {
 
-int main(int argc, char *argv[]) {
-
-//ftp://[<user>:<password>@]<host>/<url-path>
-
-	/* Check program parameters */
+	/* Check program parameter count */
 	if(argc != 2) {
+		
 		printf("download: Wrong number of arguments.\n");
 		printf("download: usage: ./download ftp://[<user>:<password>@]<host>/<url-path>\n");
 		exit(1);
 	}
 
+	/* Parse argument */
+	if(parseArgument(argv[1]) != 0) {
+		
+		printf("download: Invalid argument.\n");
+		printf("download: usage: ./download ftp://[<user>:<password>@]<host>/<url-path>\n");
+		exit(1);
+	}
 	
+	/* Default values for anonymous user */
+	if(argument_info.anonymous_f == TRUE) {
+		
+		strncpy(argument_info.user, "USER ", strlen("USER "));
+		strcpy(argument_info.user + strlen("USER "), "anonymous\r\n");
+		
+		strncpy(argument_info.password, "PASS ", strlen("PASS "));
+		strcpy(argument_info.password + strlen("PASS "), "ei11056@fe.up.pt\r\n");
+	}
 	
-
 	/* Get host IP address */
 	struct hostent* host;
-	host = getAddress(argv[1]);
+	host = getAddress(argument_info.host);
 
 	if(host == NULL) {
 		printf("download: Couldn't get info on host provided.\n");
@@ -50,7 +63,7 @@ int main(int argc, char *argv[]) {
 	if(sockfd < 0) FTPAbort(sockfd, "download: Failure connecting to FTP server control port.\n");
 
 	/* Login to FTP server */
-	FTPLogin(sockfd, "USER anonymous\r\n", "PASS ei11056@fe.up.pt\r\n");
+	FTPLogin(sockfd, argument_info.user, argument_info.password);
 
 	/* Use BINARY mode */
 	if(FTPCommand(sockfd, "TYPE I\r\n", FALSE) != 0) FTPAbort(sockfd, "download: TYPE command received 5XX code.\n");
@@ -62,10 +75,7 @@ int main(int argc, char *argv[]) {
 	if(file_info.datafd < 0) FTPAbort(sockfd, "download: Failure connecting to FTP server data port.\n");
 	
 	/* Send command to download file and download it */
-	FTPCommand(sockfd, "RETR /1MB.zip\r\n", TRUE);
-	
-
-	
+	if(FTPCommand(sockfd, argument_info.path, TRUE) != 0) FTPAbort(sockfd, "download: RETR command received 5XX code.\n");
 	
 	close(file_info.datafd);
 	close(sockfd);
@@ -73,13 +83,189 @@ int main(int argc, char *argv[]) {
 	return 0;
 }
 
+/**
+ * Parses path to file to get the file name, copies it to FTPFile_t struct
+ *
+ * @param path file path
+ */
+void parseFilePath(char* path) {
+	
+	size_t path_i = 0;
+	size_t last_slash_i = 0;
+	
+	while(path[path_i] != '\0') {
+		
+		if(path[path_i] == '/') {
+			last_slash_i = path_i;
+		}
+		
+		path_i++;
+	}
+	
+	file_info.path[0] = '.';
+	strcpy(file_info.path + 1, path + last_slash_i);
+}
+
+/**
+ * Parses command line argument and fills FTPArgument_t struct
+ *
+ * @param argument command line argument received
+ * @return 0 on success
+ */
+int8_t parseArgument(char* argument) {
+	
+	/* Check that start of argument is as expected */
+	if(strncmp(argument, "ftp://", FTP_USER_START) != 0) {
+		printf("download: Could not find \"ftp://\" in argument.\n");
+		return -1;
+	}
+	
+	size_t arg_i = 0;
+	size_t param_i = 0;
+	uint8_t at_f = FALSE;
+	uint8_t separator_f = FALSE;
+	
+	/* Search for @ symbol in argument */
+	while(argument[arg_i] != '\0') {
+		
+		if(argument[arg_i] == '@') {
+			at_f = TRUE;
+			break;
+		}
+		
+		arg_i++;
+	}
+	
+	arg_i = FTP_USER_START;
+	argument_info.anonymous_f = TRUE;
+	
+	/* Parse user and password if @ found */
+	if(at_f) {
+		
+		argument_info.anonymous_f = FALSE;
+		
+		/* Parse user */
+		strncpy(argument_info.user, "USER ", strlen("USER "));
+		param_i += strlen("USER ");
+		
+		while(argument[arg_i] != '\0') {
+			
+			if(argument[arg_i] != ':') {
+				argument_info.user[param_i] = argument[arg_i];
+				arg_i++;
+				param_i++;
+			} else {
+				arg_i++;
+				separator_f = TRUE;
+				break;
+			}
+		}
+		
+		if(!separator_f) {
+			printf("download: Could not find \":\" separator in argument.\n");
+			return -1;
+		} else if(param_i <= strlen("USER ")) {
+			printf("download: Could not find user in argument.\n");
+			return -1;
+		}
+		
+		strcpy(argument_info.user + param_i, "\r\n");
+		separator_f = FALSE;
+		param_i = 0;
+		
+		/* Parse password */
+		strncpy(argument_info.password, "PASS ", strlen("PASS "));
+		param_i += strlen("PASS ");
+		
+		while(argument[arg_i] != '\0') {
+			
+			if(argument[arg_i] != '@') {
+				argument_info.password[param_i] = argument[arg_i];
+				arg_i++;
+				param_i++;
+			} else {
+				arg_i++;
+				separator_f = TRUE;
+				break;
+			}
+		}
+		
+		if(!separator_f) {
+			printf("download: Could not find \"@\" separator in argument.\n");
+			return -1;
+		} else if(param_i <= strlen("PASS ")) {
+			printf("download: Could not find password in argument.\n");
+			return -1;
+		}
+		
+		strcpy(argument_info.password + param_i, "\r\n");
+		separator_f = FALSE;
+		param_i = 0;
+	}
+	
+	/* Parse host name */
+	while(argument[arg_i] != '\0') {
+
+		if(argument[arg_i] != '/') {
+			argument_info.host[param_i] = argument[arg_i];
+			arg_i++;
+			param_i++;
+		} else {
+			separator_f = TRUE;
+			break;
+		}
+	}
+
+	if(!separator_f) {
+		printf("download: Could not find \"/\" separator in argument for host.\n");
+		return -1;
+	} else if(param_i <= 0) {
+		printf("download: Could not find host in argument.\n");
+		return -1;
+	}
+	
+	argument_info.host[param_i] = '\0';
+	separator_f = FALSE;
+	param_i = 0;
+	
+	/* Parse file path */
+	strncpy(argument_info.path, "RETR ", strlen("RETR "));
+	param_i += strlen("RETR ");
+	
+	while(argument[arg_i] != '\0') {
+
+		argument_info.path[param_i] = argument[arg_i];
+		arg_i++;
+		param_i++;
+	}
+
+	if(param_i <= 0) {
+		printf("download: Could not find file path in argument.\n");
+		return -1;
+	}
+
+	argument_info.path[param_i] = '\0';
+	
+	/* Extract file name from path */
+	parseFilePath(argument_info.path);
+	
+	strcpy(argument_info.path + param_i, "\r\n");
+	
+	return 0;
+}
+
+/**
+ * Uses FTP data socket connection to download file requested
+ */
 void FTPDownload() {
 	
-	FILE* fd = fopen(file_path, "wb");
+	/* Open file with file name parsed previously */
+	FILE* fd = fopen(file_info.path, "wb");
 	
 	char file_data[FTP_MSG_SIZE];
 	int n;
 	
+	/* Read until no more data is returned */
 	while((n = read(file_info.datafd, file_data, FTP_MSG_SIZE)) > 0) {
 		
 		fwrite(file_data, 1, n, fd);
@@ -101,7 +287,7 @@ int32_t getDataPort(char* message) {
 	size_t comma_count = 0;
 	char msb[6];
 	char lsb[6];
-	uint8_t success_f = 0;
+	uint8_t success_f = FALSE;
 	
 	/* Process message up to null terminator */
 	while(message[msg_i] != '\0') {
@@ -134,7 +320,7 @@ int32_t getDataPort(char* message) {
 			}
 		
 			lsb[number_i] = '\0';
-			success_f = 1;
+			success_f = TRUE;
 			
 			break;
 		}
