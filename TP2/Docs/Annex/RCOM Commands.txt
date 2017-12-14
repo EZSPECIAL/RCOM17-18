@@ -1,0 +1,114 @@
+-- Experiment 1
+
+tuxy1
+- ifconfig eth0 down
+- ifconfig eth1 down
+- ifconfig eth0 172.16.y0.1/24
+
+tuxy4
+- ifconfig eth0 down
+- ifconfig eth1 down
+- ifconfig eth0 172.16.y0.254/24
+
+-- Experiment 2
+
+tuxy2
+- ifconfig eth0 down
+- ifconfig eth1 down
+- ifconfig eth0 172.16.y1.1/24
+
+switch
+- conf t
+- vlan y0
+- exit
+- vlan y1
+- end
+
+- conf t
+- interface fastethernet 0/1
+- switchport mode access
+- switchport access vlan y0
+- end
+
+- conf t
+- interface fastethernet 0/4
+- switchport mode access
+- switchport access vlan y0
+- end
+
+- conf t
+- interface fastethernet 0/2
+- switchport mode access
+- switchport access vlan y1
+- end
+
+-- Experiment 3
+
+tuxy4
+- ifconfig eth1 172.16.y1.253/24
+- echo 1 > /proc/sys/net/ipv4/ip_forward
+- echo 0 > /proc/sys/net/ipv4/icmp_echo_ignore_broadcasts
+
+switch
+- conf t
+- interface fastethernet 0/14
+- switchport mode access
+- switchport access vlan y1
+- end
+
+tuxy2
+- route add -net 172.16.y0.0/24 gw 172.16.y1.253
+
+tuxy1
+- route add -net 172.16.y1.0/24 gw 172.16.y0.254
+
+-- Experiment 4
+
+switch
+- conf t
+- interface fastethernet 0/20
+- switchport mode access
+- switchport access vlan y1
+- end
+
+router (no NAT)
+- conf t
+- interface gigabitethernet 0/0
+- ip address 172.16.y1.254 255.255.255.0
+- no shutdown
+- end
+
+- conf t
+- ip route 172.16.y0.0 255.255.255.0 172.16.y1.253
+- end
+
+tuxy1
+- route add -net default gw 172.16.y0.254
+- route del -net 172.16.y1.0/24
+
+tuxy2
+- route add -net default gw 172.16.y1.254
+
+tuxy4
+- route add -net default gw 172.16.y1.254
+
+router (no NAT)
+- conf t
+- interface gigabitethernet 0/1
+- ip address 172.16.1.y9 255.255.255.0
+- no shutdown
+- end
+
+- conf t
+- ip route 0.0.0.0 0.0.0.0 172.16.1.254
+- end
+
+router (NAT)
+- Lab2 handout instructions
+
+Experiment 5
+
+tuxy1 tuxy2 tuxy4
+- edit resolv.conf to have
+"search netlab.fe.up.pt
+nameserver 172.16.1.1"
