@@ -55,7 +55,7 @@ int main(int argc, char* argv[]) {
 	}
 
 	printf("Host Name  : %s\n", host->h_name);
-	printf("IP Address : %s\n", inet_ntoa(*((struct in_addr*)host->h_addr)));
+	printf("IP Address : %s\n\n", inet_ntoa(*((struct in_addr*)host->h_addr)));
 
 	/* Get TCP socket to host */
 	int sockfd = getTCPSocket(inet_addr(inet_ntoa(*((struct in_addr*)host->h_addr))), FTP_PORT);
@@ -77,6 +77,7 @@ int main(int argc, char* argv[]) {
 	/* Send command to download file and download it */
 	if(FTPCommand(sockfd, argument_info.path, TRUE) != 0) FTPAbort(sockfd, "download: RETR command received 5XX code.\n");
 	
+    printf("\n");
 	close(file_info.datafd);
 	close(sockfd);
 	
@@ -360,6 +361,7 @@ uint16_t FTPPassive(int sockfd) {
 void FTPAbort(int sockfd, char* message) {
 	
 	printf("%s", message);
+	close(file_info.datafd);
 	close(sockfd);
 	exit(1);
 }
